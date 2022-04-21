@@ -187,7 +187,10 @@ class DocbookCodeGenerator:
         if len(m.since) > 0:
             self.out.write('<para role="since">Since %s</para>\n'%(m.since))
         if m.deprecated:
-            self.out.write('<warning><para>The %s() method is deprecated.</para></warning>'%(m.name))
+            self.out.write(
+                f'<warning><para>The {m.name}() method is deprecated.</para></warning>'
+            )
+
         self.out.write('</refsect2>\n')
 
     def print_signal(self, i, s):
@@ -233,34 +236,44 @@ class DocbookCodeGenerator:
             s = s.replace(key, self.expand_iface_dict[key])
         if expandParamsAndConstants:
             # replace @foo with <parameter>foo</parameter>
-            s = re.sub('@[a-zA-Z0-9_]*', lambda m: '<parameter>' + m.group(0)[1:] + '</parameter>', s)
+            s = re.sub(
+                '@[a-zA-Z0-9_]*',
+                lambda m: f'<parameter>{m.group(0)[1:]}</parameter>',
+                s,
+            )
+
             # replace e.g. %TRUE with <constant>TRUE</constant>
-            s = re.sub('%[a-zA-Z0-9_]*', lambda m: '<constant>' + m.group(0)[1:] + '</constant>', s)
+            s = re.sub(
+                '%[a-zA-Z0-9_]*',
+                lambda m: f'<constant>{m.group(0)[1:]}</constant>',
+                s,
+            )
+
         return s
 
     def expand_paras(self, s, expandParamsAndConstants):
         s = self.expand(s, expandParamsAndConstants).strip()
         if not s.startswith("<para"):
-            s = "<para>%s</para>" % s
+            s = f"<para>{s}</para>"
         return s
 
     def generate_expand_dicts(self):
         self.expand_member_dict = {}
         self.expand_iface_dict = {}
         for i in self.ifaces:
-            key = '#%s'%(i.name)
+            key = f'#{i.name}'
             value = '<link linkend="gdbus-interface-%s.top_of_page">%s</link>'%(utils.dots_to_hyphens(i.name), i.name)
             self.expand_iface_dict[key] = value
             for m in i.methods:
-                key = '%s.%s()'%(i.name, m.name)
+                key = f'{i.name}.{m.name}()'
                 value = '<link linkend="gdbus-method-%s.%s">%s()</link>'%(utils.dots_to_hyphens(i.name), m.name, m.name)
                 self.expand_member_dict[key] = value
             for s in i.signals:
-                key = '#%s::%s'%(i.name, s.name)
+                key = f'#{i.name}::{s.name}'
                 value = '<link linkend="gdbus-signal-%s.%s">"%s"</link>'%(utils.dots_to_hyphens(i.name), s.name, s.name)
                 self.expand_member_dict[key] = value
             for p in i.properties:
-                key = '#%s:%s'%(i.name, p.name)
+                key = f'#{i.name}:{p.name}'
                 value = '<link linkend="gdbus-property-%s.%s">"%s"</link>'%(utils.dots_to_hyphens(i.name), p.name, p.name)
                 self.expand_member_dict[key] = value
         # Make sure to expand the keys in reverse order so e.g. #org.foo.Iface:MediaCompat
@@ -270,22 +283,22 @@ class DocbookCodeGenerator:
 
     def generate(self):
         for i in self.ifaces:
-            self.out = open('%s-%s.xml'%(self.docbook, i.name), 'w')
-            self.out.write(''%())
+            self.out = open(f'{self.docbook}-{i.name}.xml', 'w')
+            self.out.write('')
             self.out.write('<?xml version="1.0" encoding="utf-8"?>\n'%())
             self.out.write('<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN"\n'%())
             self.out.write('               "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd" [\n'%())
             self.out.write(']>\n'%())
             self.out.write('<refentry id="gdbus-%s">\n'%(i.name))
-            self.out.write('  <refmeta>'%())
+            self.out.write('  <refmeta>')
             self.out.write('    <refentrytitle role="top_of_page" id="gdbus-interface-%s.top_of_page">%s</refentrytitle>\n'%(utils.dots_to_hyphens(i.name), i.name))
             self.out.write('  <indexterm zone="gdbus-interface-%s.top_of_page"><primary sortas="%s">%s</primary></indexterm>\n'%(utils.dots_to_hyphens(i.name), i.name_without_prefix, i.name))
-            self.out.write('  </refmeta>'%())
+            self.out.write('  </refmeta>')
 
-            self.out.write('  <refnamediv>'%())
-            self.out.write('    <refname>%s</refname>'%(i.name))
-            self.out.write('    <refpurpose>%s</refpurpose>'%(i.doc_string_brief))
-            self.out.write('  </refnamediv>'%())
+            self.out.write('  <refnamediv>')
+            self.out.write(f'    <refname>{i.name}</refname>')
+            self.out.write(f'    <refpurpose>{i.doc_string_brief}</refpurpose>')
+            self.out.write('  </refnamediv>')
 
             if len(i.methods) > 0:
                 self.print_synopsis_methods(i)
@@ -300,7 +313,10 @@ class DocbookCodeGenerator:
             if len(i.since) > 0:
                 self.out.write('  <para role="since">Since %s</para>\n'%(i.since))
             if i.deprecated:
-                self.out.write('<warning><para>The %s interface is deprecated.</para></warning>'%(i.name))
+                self.out.write(
+                    f'<warning><para>The {i.name} interface is deprecated.</para></warning>'
+                )
+
             self.out.write('</refsect1>\n'%())
 
             if len(i.methods) > 0:

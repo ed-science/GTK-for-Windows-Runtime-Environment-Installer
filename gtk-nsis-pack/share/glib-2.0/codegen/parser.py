@@ -73,15 +73,15 @@ class DBusXMLParser:
                     colon_index = line.find(': ')
                     if colon_index == -1:
                         if line.endswith(':'):
-                            symbol = line[0:len(line)-1]
+                            symbol = line[:-1]
                             comment_state = DBusXMLParser.COMMENT_STATE_PARAMS
                         else:
                             comment_state = DBusXMLParser.COMMENT_STATE_SKIP
                     else:
-                        symbol = line[0:colon_index]
+                        symbol = line[:colon_index]
                         rest_of_line = line[colon_index+2:].strip()
                         if len(rest_of_line) > 0:
-                            body += '<para>' + rest_of_line + '</para>'
+                            body += f'<para>{rest_of_line}</para>'
                         comment_state = DBusXMLParser.COMMENT_STATE_PARAMS
             elif comment_state == DBusXMLParser.COMMENT_STATE_PARAMS:
                 if line.startswith('@'):
@@ -109,10 +109,9 @@ class DBusXMLParser:
                         body += '<para>'
                         in_para = True
                     body += orig_line + '\n'
-                else:
-                    if in_para:
-                        body += '</para>'
-                        in_para = False
+                elif in_para:
+                    body += '</para>'
+                    in_para = False
         if in_para:
             body += '</para>'
 
@@ -191,9 +190,7 @@ class DBusXMLParser:
         elif self.state == DBusXMLParser.STATE_METHOD:
             if name == DBusXMLParser.STATE_ARG:
                 self.state = DBusXMLParser.STATE_ARG
-                arg_name = None
-                if 'name' in attrs:
-                    arg_name = attrs['name']
+                arg_name = attrs['name'] if 'name' in attrs else None
                 arg = dbustypes.Arg(arg_name, attrs['type'])
                 direction = attrs.get('direction', 'in')
                 if direction == 'in':
@@ -212,20 +209,21 @@ class DBusXMLParser:
                 self.state = DBusXMLParser.STATE_IGNORED
 
             # assign docs, if any
-            if self.doc_comment_last_symbol == old_cur_object.name:
-                if 'name' in attrs and attrs['name'] in self.doc_comment_params:
-                    doc_string = self.doc_comment_params[attrs['name']]
-                    if doc_string != None:
-                        self._cur_object.doc_string = doc_string
-                    if 'since' in self.doc_comment_params:
-                        self._cur_object.since = self.doc_comment_params['since']
+            if (
+                self.doc_comment_last_symbol == old_cur_object.name
+                and 'name' in attrs
+                and attrs['name'] in self.doc_comment_params
+            ):
+                doc_string = self.doc_comment_params[attrs['name']]
+                if doc_string != None:
+                    self._cur_object.doc_string = doc_string
+                if 'since' in self.doc_comment_params:
+                    self._cur_object.since = self.doc_comment_params['since']
 
         elif self.state == DBusXMLParser.STATE_SIGNAL:
             if name == DBusXMLParser.STATE_ARG:
                 self.state = DBusXMLParser.STATE_ARG
-                arg_name = None
-                if 'name' in attrs:
-                    arg_name = attrs['name']
+                arg_name = attrs['name'] if 'name' in attrs else None
                 arg = dbustypes.Arg(arg_name, attrs['type'])
                 self._cur_object.args.append(arg)
                 self._cur_object = arg
@@ -238,13 +236,16 @@ class DBusXMLParser:
                 self.state = DBusXMLParser.STATE_IGNORED
 
             # assign docs, if any
-            if self.doc_comment_last_symbol == old_cur_object.name:
-                if 'name' in attrs and attrs['name'] in self.doc_comment_params:
-                    doc_string = self.doc_comment_params[attrs['name']]
-                    if doc_string != None:
-                        self._cur_object.doc_string = doc_string
-                    if 'since' in self.doc_comment_params:
-                        self._cur_object.since = self.doc_comment_params['since']
+            if (
+                self.doc_comment_last_symbol == old_cur_object.name
+                and 'name' in attrs
+                and attrs['name'] in self.doc_comment_params
+            ):
+                doc_string = self.doc_comment_params[attrs['name']]
+                if doc_string != None:
+                    self._cur_object.doc_string = doc_string
+                if 'since' in self.doc_comment_params:
+                    self._cur_object.since = self.doc_comment_params['since']
 
         elif self.state == DBusXMLParser.STATE_PROPERTY:
             if name == DBusXMLParser.STATE_ANNOTATION:

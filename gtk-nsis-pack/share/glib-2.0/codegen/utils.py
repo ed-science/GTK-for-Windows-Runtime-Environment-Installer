@@ -27,12 +27,11 @@ def strip_dots(s):
     for c in s:
         if c == '.':
             force_upper = True
+        elif force_upper:
+            ret += c.upper()
+            force_upper = False
         else:
-            if force_upper:
-                ret += c.upper()
-                force_upper = False
-            else:
-                ret += c
+            ret += c
     return ret
 
 def dots_to_hyphens(s):
@@ -63,9 +62,7 @@ def camel_case_to_uscore(s):
     return ret
 
 def is_ugly_case(s):
-    if s and s.find('_') > 0:
-        return True
-    return False
+    return bool(s and s.find('_') > 0)
 
 def lookup_annotation(annotations, key):
     if annotations:
@@ -76,27 +73,18 @@ def lookup_annotation(annotations, key):
 
 def lookup_docs(annotations):
     s = lookup_annotation(annotations, 'org.gtk.GDBus.DocString')
-    if s == None:
-        return ''
-    else:
-        return s
+    return '' if s is None else s
 
 def lookup_since(annotations):
     s = lookup_annotation(annotations, 'org.gtk.GDBus.Since')
-    if s == None:
-        return ''
-    else:
-        return s
+    return '' if s is None else s
 
 def lookup_brief_docs(annotations):
     s = lookup_annotation(annotations, 'org.gtk.GDBus.DocString.Short')
-    if s == None:
-        return ''
-    else:
-        return s
+    return '' if s is None else s
 
 def version_cmp_key(key):
     # If the 'since' version is empty put a 0 in its place as this will
     # allow LooseVersion to work and will always compare lower.
-    v = key[0] if key[0] else '0'
+    v = key[0] or '0'
     return (distutils.version.LooseVersion(v), key[1])

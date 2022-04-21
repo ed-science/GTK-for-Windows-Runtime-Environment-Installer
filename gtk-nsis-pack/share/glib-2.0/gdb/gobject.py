@@ -22,11 +22,11 @@ def read_global_var (symname):
     return gdb.selected_frame().read_var(symname)
 
 def g_type_to_name (gtype):
-    def lookup_fundamental_type (typenode):
+    def lookup_fundamental_type(typenode):
         if typenode == 0:
             return None
         val = read_global_var ("static_fundamental_type_nodes")
-        if val == None:
+        if val is None:
             return None
         return val[typenode >> 2].address()
 
@@ -64,14 +64,13 @@ def is_g_type_instance (val):
     type = type.target()
     return is_g_type_instance_helper (type)
 
-def g_type_name_from_instance (instance):
+def g_type_name_from_instance(instance):
     if long(instance) != 0:
         try:
             inst = instance.cast (gdb.lookup_type("GTypeInstance").pointer())
             klass = inst["g_class"]
             gtype = klass["g_type"]
-            name = g_type_to_name (gtype)
-            return name
+            return g_type_to_name (gtype)
         except RuntimeError:
             pass
     return None
@@ -82,20 +81,16 @@ class GTypePrettyPrinter:
     def __init__ (self, val):
         self.val = val
 
-    def to_string (self):
-        name = g_type_name_from_instance (self.val)
-        if name:
+    def to_string(self):
+        if name := g_type_name_from_instance(self.val):
             return ("0x%x [%s]")% (long(self.val), name)
         return  ("0x%x") % (long(self.val))
 
-def pretty_printer_lookup (val):
-    if is_g_type_instance (val):
-        return GTypePrettyPrinter (val)
+def pretty_printer_lookup(val):
+    return GTypePrettyPrinter (val) if is_g_type_instance (val) else None
 
-    return None
-
-def get_signal_name (id):
-    if id == None:
+def get_signal_name(id):
+    if id is None:
         return None
     id = long(id)
     if id == 0:
@@ -123,10 +118,10 @@ class SignalFrame(FrameDecorator):
     def name (self):
         return "signal-emission"
 
-    def read_var (self, frame, name, array = None):
+    def read_var(self, frame, name, array = None):
         try:
             v = frame_var (frame, name)
-            if v == None or v.is_optimized_out:
+            if v is None or v.is_optimized_out:
                 return None
             if array != None:
                 array.append (v)
@@ -134,10 +129,10 @@ class SignalFrame(FrameDecorator):
         except ValueError:
             return None
 
-    def read_object (self, frame, name, array = None):
+    def read_object(self, frame, name, array = None):
         try:
             v = frame_var (frame, name)
-            if v == None or v.is_optimized_out:
+            if v is None or v.is_optimized_out:
                 return None
             v = v.cast (gdb.lookup_type("GObject").pointer())
             # Ensure this is a somewhat correct object pointer
@@ -153,21 +148,15 @@ class SignalFrame(FrameDecorator):
         if obj != None:
             array.append (obj)
 
-    def or_join_array (self, array):
-        if len(array) == 0:
-            return "???"
-        else:
-            return ' or '.join(set(map(str, array)))
+    def or_join_array(self, array):
+        return "???" if len(array) == 0 else ' or '.join(set(map(str, array)))
 
     def get_detailed_signal_from_frame(self, frame, signal):
         detail = self.read_var (frame, "detail")
         detail = glib.g_quark_to_string (detail)
-        if detail is not None:
-            return signal + ":" + detail
-        else:
-            return detail
+        return f"{signal}:{detail}" if detail is not None else detail
 
-    def function (self):
+    def function(self):
         instances = []
         signals = []
 
@@ -175,15 +164,15 @@ class SignalFrame(FrameDecorator):
             name = frame_name(frame)
             if name == "signal_emit_unlocked_R":
                 self.read_object (frame, "instance", instances)
-                node = self.read_var (frame, "node")
-                if node:
+                if node := self.read_var(frame, "node"):
                     signal = node["name"].string()
                     signal = self.get_detailed_signal_from_frame(frame, signal)
                     self.append(signals, signal)
 
             if name == "g_signal_emitv":
-                instance_and_params = self.read_var (frame, "instance_and_params")
-                if instance_and_params:
+                if instance_and_params := self.read_var(
+                    frame, "instance_and_params"
+                ):
                     instance = instance_and_params[0]["v_pointer"].cast (gdb.Type("GObject").pointer())
                     self.append (instances, instance)
                 id = self.read_var (frame, "signal_id")
@@ -192,7 +181,7 @@ class SignalFrame(FrameDecorator):
                     signal = self.get_detailed_signal_from_frame(frame, signal)
                     self.append (signals, signal)
 
-            if name == "g_signal_emit_valist" or name == "g_signal_emit":
+            if name in ["g_signal_emit_valist", "g_signal_emit"]:
                 self.read_object (frame, "instance", instances)
                 id = self.read_var (frame, "signal_id")
                 signal = get_signal_name (id)
@@ -208,13 +197,13 @@ class SignalFrame(FrameDecorator):
         instance = self.or_join_array (instances)
         signal = self.or_join_array (signals)
 
-        return "<emit signal %s on instance %s>" %  (signal, instance)
+        return f"<emit signal {signal} on instance {instance}>"
 
-    def elided (self):
-        return self.frames[0:-1]
+    def elided(self):
+        return self.frames[:-1]
 
-    def describe (self, stream, full):
-        stream.write (" " + self.function () + "\n")
+    def describe(self, stream, full):
+        stream.write(f" {self.function()}" + "\n")
 
 class GFrameDecorator:
     def __init__ (self, iter):
@@ -232,13 +221,17 @@ class GFrameDecorator:
             except StopIteration:
                 return
 
-    def find_signal_emission (self):
-        for i in range (min (len(self.queue), 3)):
-            if frame_name(self.queue[i]) == "signal_emit_unlocked_R":
-                return i
-        return -1
+    def find_signal_emission(self):
+        return next(
+            (
+                i
+                for i in range(min(len(self.queue), 3))
+                if frame_name(self.queue[i]) == "signal_emit_unlocked_R"
+            ),
+            -1,
+        )
 
-    def next (self):
+    def next(self):
         # Ensure we have enough frames for a full signal emission
         self.fill()
 
@@ -249,9 +242,7 @@ class GFrameDecorator:
         emission = self.find_signal_emission ()
         if emission > 0:
             start = emission
-            while True:
-                if start == 0:
-                    break
+            while start != 0:
                 prev_name = frame_name(self.queue[start-1])
                 if prev_name.find("_marshal_") >= 0 or prev_name == "g_closure_invoke":
                     start = start - 1
@@ -285,8 +276,8 @@ class GFrameFilter(object):
     def filter(self, iterator):
         return GFrameDecorator(iterator)
 
-def register (obj):
-    if obj == None:
+def register(obj):
+    if obj is None:
         obj = gdb
 
     if HAVE_GDB_FRAMEDECORATOR:

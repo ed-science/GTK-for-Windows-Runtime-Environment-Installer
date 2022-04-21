@@ -41,7 +41,7 @@ class Arg:
         if len(self.since) == 0:
             self.since = utils.lookup_since(self.annotations)
 
-        if self.name == None:
+        if self.name is None:
             self.name = 'unnamed_arg%d'%arg_number
         # default to GVariant
         self.ctype_in_g  = 'GVariant *'
@@ -50,8 +50,8 @@ class Arg:
         self.ctype_out = 'GVariant **'
         self.gtype = 'G_TYPE_VARIANT'
         self.free_func = 'g_variant_unref'
-        self.format_in = '@' + self.signature
-        self.format_out = '@' + self.signature
+        self.format_in = f'@{self.signature}'
+        self.format_out = f'@{self.signature}'
         self.gvariant_get = 'XXX'
         self.gvalue_get = 'g_value_get_variant'
         if not utils.lookup_annotation(self.annotations, 'org.gtk.GDBus.C.ForceGVariant'):
@@ -238,8 +238,8 @@ class Method:
             self.doc_string = utils.lookup_docs(self.annotations)
         if len(self.since) == 0:
             self.since = utils.lookup_since(self.annotations)
-            if len(self.since) == 0:
-                self.since = containing_iface.since
+        if len(self.since) == 0:
+            self.since = containing_iface.since
 
         name = self.name
         overridden_name = utils.lookup_annotation(self.annotations, 'org.gtk.GDBus.C.Name')
@@ -277,8 +277,8 @@ class Signal:
             self.doc_string = utils.lookup_docs(self.annotations)
         if len(self.since) == 0:
             self.since = utils.lookup_since(self.annotations)
-            if len(self.since) == 0:
-                self.since = containing_iface.since
+        if len(self.since) == 0:
+            self.since = containing_iface.since
 
         name = self.name
         overridden_name = utils.lookup_annotation(self.annotations, 'org.gtk.GDBus.C.Name')
@@ -290,11 +290,8 @@ class Signal:
             self.name_lower = utils.camel_case_to_uscore(name).lower().replace('-', '_')
         self.name_hyphen = self.name_lower.replace('_', '-')
 
-        arg_count = 0
-        for a in self.args:
+        for arg_count, a in enumerate(self.args):
             a.post_process(interface_prefix, cns, cns_upper, cns_lower, arg_count)
-            arg_count += 1
-
         if utils.lookup_annotation(self.annotations, 'org.freedesktop.DBus.Deprecated') == 'true':
             self.deprecated = True
 
@@ -316,7 +313,7 @@ class Property:
         elif self.access == 'write':
             self.writable = True
         else:
-            raise RuntimeError('Invalid access type %s'%self.access)
+            raise RuntimeError(f'Invalid access type {self.access}')
         self.doc_string = ''
         self.since = ''
         self.deprecated = False
@@ -326,8 +323,8 @@ class Property:
             self.doc_string = utils.lookup_docs(self.annotations)
         if len(self.since) == 0:
             self.since = utils.lookup_since(self.annotations)
-            if len(self.since) == 0:
-                self.since = containing_iface.since
+        if len(self.since) == 0:
+            self.since = containing_iface.since
 
         name = self.name
         overridden_name = utils.lookup_annotation(self.annotations, 'org.gtk.GDBus.C.Name')
@@ -372,12 +369,12 @@ class Interface:
         if len(c_namespace) > 0:
             if utils.is_ugly_case(c_namespace):
                 cns = c_namespace.replace('_', '')
-                cns_upper = c_namespace.upper() + '_'
-                cns_lower = c_namespace.lower() + '_'
+                cns_upper = f'{c_namespace.upper()}_'
+                cns_lower = f'{c_namespace.lower()}_'
             else:
                 cns = c_namespace
-                cns_upper = utils.camel_case_to_uscore(c_namespace).upper() + '_'
-                cns_lower = utils.camel_case_to_uscore(c_namespace).lower() + '_'
+                cns_upper = f'{utils.camel_case_to_uscore(c_namespace).upper()}_'
+                cns_lower = f'{utils.camel_case_to_uscore(c_namespace).lower()}_'
         else:
             cns = ''
             cns_upper = ''
@@ -403,7 +400,7 @@ class Interface:
                     name = name[len(interface_prefix):]
             self.name_without_prefix = name
             name = utils.strip_dots(name)
-            name_with_ns = utils.strip_dots(cns + '.' + name)
+            name_with_ns = utils.strip_dots(f'{cns}.{name}')
             self.camel_name = name_with_ns
             self.ns_upper = cns_upper
             self.name_lower = cns_lower + utils.camel_case_to_uscore(name)

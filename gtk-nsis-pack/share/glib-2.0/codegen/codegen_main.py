@@ -30,69 +30,52 @@ from . import codegen
 from . import codegen_docbook
 
 def find_arg(arg_list, arg_name):
-    for a in arg_list:
-        if a.name == arg_name:
-            return a
-    return None
+    return next((a for a in arg_list if a.name == arg_name), None)
 
 def find_method(iface, method):
-    for m in iface.methods:
-        if m.name == method:
-            return m
-    return None
+    return next((m for m in iface.methods if m.name == method), None)
 
 def find_signal(iface, signal):
-    for m in iface.signals:
-        if m.name == signal:
-            return m
-    return None
+    return next((m for m in iface.signals if m.name == signal), None)
 
 def find_prop(iface, prop):
-    for m in iface.properties:
-        if m.name == prop:
-            return m
-    return None
+    return next((m for m in iface.properties if m.name == prop), None)
 
 def apply_annotation(iface_list, iface, method, signal, prop, arg, key, value):
-    iface_obj = None
-    for i in iface_list:
-        if i.name == iface:
-            iface_obj = i
-            break
-
-    if iface_obj == None:
-        raise RuntimeError('No interface %s'%iface)
+    iface_obj = next((i for i in iface_list if i.name == iface), None)
+    if iface_obj is None:
+        raise RuntimeError(f'No interface {iface}')
 
     target_obj = None
 
     if method:
         method_obj = find_method(iface_obj, method)
-        if method_obj == None:
-            raise RuntimeError('No method %s on interface %s'%(method, iface))
+        if method_obj is None:
+            raise RuntimeError(f'No method {method} on interface {iface}')
         if arg:
             arg_obj = find_arg(method_obj.in_args, arg)
-            if (arg_obj == None):
+            if arg_obj is None:
                 arg_obj = find_arg(method_obj.out_args, arg)
-                if (arg_obj == None):
-                    raise RuntimeError('No arg %s on method %s on interface %s'%(arg, method, iface))
+            if arg_obj is None:
+                raise RuntimeError(f'No arg {arg} on method {method} on interface {iface}')
             target_obj = arg_obj
         else:
             target_obj = method_obj
     elif signal:
         signal_obj = find_signal(iface_obj, signal)
-        if signal_obj == None:
-            raise RuntimeError('No signal %s on interface %s'%(signal, iface))
+        if signal_obj is None:
+            raise RuntimeError(f'No signal {signal} on interface {iface}')
         if arg:
             arg_obj = find_arg(signal_obj.args, arg)
-            if (arg_obj == None):
-                raise RuntimeError('No arg %s on signal %s on interface %s'%(arg, signal, iface))
+            if arg_obj is None:
+                raise RuntimeError(f'No arg {arg} on signal {signal} on interface {iface}')
             target_obj = arg_obj
         else:
             target_obj = signal_obj
     elif prop:
         prop_obj = find_prop(iface_obj, prop)
-        if prop_obj == None:
-            raise RuntimeError('No property %s on interface %s'%(prop, iface))
+        if prop_obj is None:
+            raise RuntimeError(f'No property {prop} on interface {iface}')
         target_obj = prop_obj
     else:
         target_obj = iface_obj
@@ -105,14 +88,14 @@ def apply_annotations(iface_list, annotation_list):
         pos = what.find('::')
         if pos != -1:
             # signal
-            iface = what[0:pos];
+            iface = what[:pos];
             signal = what[pos + 2:]
             pos = signal.find('[')
             if pos != -1:
                 arg = signal[pos + 1:]
-                signal = signal[0:pos]
+                signal = signal[:pos]
                 pos = arg.find(']')
-                arg = arg[0:pos]
+                arg = arg[:pos]
                 apply_annotation(iface_list, iface, None, signal, None, arg, key, value)
             else:
                 apply_annotation(iface_list, iface, None, signal, None, None, key, value)
@@ -120,22 +103,22 @@ def apply_annotations(iface_list, annotation_list):
             pos = what.find(':')
             if pos != -1:
                 # property
-                iface = what[0:pos];
+                iface = what[:pos];
                 prop = what[pos + 1:]
                 apply_annotation(iface_list, iface, None, None, prop, None, key, value)
             else:
                 pos = what.find('()')
                 if pos != -1:
                     # method
-                    combined = what[0:pos]
+                    combined = what[:pos]
                     pos = combined.rfind('.')
-                    iface = combined[0:pos]
+                    iface = combined[:pos]
                     method = combined[pos + 1:]
                     pos = what.find('[')
                     if pos != -1:
                         arg = what[pos + 1:]
                         pos = arg.find(']')
-                        arg = arg[0:pos]
+                        arg = arg[:pos]
                         apply_annotation(iface_list, iface, method, None, None, arg, key, value)
                     else:
                         apply_annotation(iface_list, iface, method, None, None, None, key, value)
@@ -164,9 +147,8 @@ def codegen_main():
 
     all_ifaces = []
     for fname in args:
-        f = open(fname, 'rb')
-        xml_data = f.read()
-        f.close()
+        with open(fname, 'rb') as f:
+            xml_data = f.read()
         parsed_ifaces = parser.parse_dbus_xml(xml_data)
         all_ifaces.extend(parsed_ifaces)
 
@@ -181,20 +163,17 @@ def codegen_main():
     if docbook:
         ret = docbook_gen.generate()
 
-    c_code = opts.generate_c_code
-    if c_code:
-        h = open(c_code + '.h', 'w')
-        c = open(c_code + '.c', 'w')
-        gen = codegen.CodeGenerator(all_ifaces,
-                                    opts.c_namespace,
-                                    opts.interface_prefix,
-                                    opts.c_generate_object_manager,
-                                    docbook_gen,
-                                    h, c);
-        ret = gen.generate()
-        h.close()
-        c.close()
-
+    if c_code := opts.generate_c_code:
+        h = open(f'{c_code}.h', 'w')
+        with open(f'{c_code}.c', 'w') as c:
+            gen = codegen.CodeGenerator(all_ifaces,
+                                        opts.c_namespace,
+                                        opts.interface_prefix,
+                                        opts.c_generate_object_manager,
+                                        docbook_gen,
+                                        h, c);
+            ret = gen.generate()
+            h.close()
     sys.exit(0)
 
 if __name__ == "__main__":

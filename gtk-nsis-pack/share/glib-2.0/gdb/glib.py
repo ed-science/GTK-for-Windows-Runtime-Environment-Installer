@@ -8,8 +8,8 @@ if sys.version_info[0] >= 3:
 def read_global_var (symname):
     return gdb.selected_frame().read_var(symname)
 
-def g_quark_to_string (quark):
-    if quark == None:
+def g_quark_to_string(quark):
+    if quark is None:
         return None
     quark = long(quark)
     if quark == 0:
@@ -170,8 +170,8 @@ def pretty_printer_lookup (val):
             return GListPrinter(val, "GSList")
     return None
 
-def register (obj):
-    if obj == None:
+def register(obj):
+    if obj is None:
         obj = gdb
 
     obj.pretty_printers.append(pretty_printer_lookup)
@@ -184,10 +184,8 @@ class ForeachCommand (gdb.Command):
                                                gdb.COMMAND_DATA,
                                                gdb.COMPLETE_SYMBOL)
 
-    def valid_name (self, name):
-        if not name[0].isalpha():
-            return False
-        return True
+    def valid_name(self, name):
+        return bool(name[0].isalpha())
 
     def parse_args (self, arg):
         i = arg.find(" ")
@@ -241,7 +239,7 @@ class ForeachCommand (gdb.Command):
             self.do_iter (arg, l["data"], command)
             l = l["next"]
 
-    def pick_iterator (self, container):
+    def pick_iterator(self, container):
         t = container.type.unqualified()
         if t.code == gdb.TYPE_CODE_PTR:
             t = t.target().unqualified()
@@ -250,7 +248,7 @@ class ForeachCommand (gdb.Command):
                 return self.slist_iterator
             if t == "GList":
                 return self.list_iterator
-        raise Exception("Invalid container type %s"%(str(container.type)))
+        raise Exception(f"Invalid container type {str(container.type)}")
 
     def invoke (self, arg, from_tty):
         (var, container, command) = self.parse_args(arg)

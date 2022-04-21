@@ -38,11 +38,11 @@ class CodeGenerator:
         if len(namespace) > 0:
             if utils.is_ugly_case(namespace):
                 self.namespace = namespace.replace('_', '')
-                self.ns_upper = namespace.upper() + '_'
-                self.ns_lower = namespace.lower() + '_'
+                self.ns_upper = f'{namespace.upper()}_'
+                self.ns_lower = f'{namespace.lower()}_'
             else:
-                self.ns_upper = utils.camel_case_to_uscore(namespace).upper() + '_'
-                self.ns_lower = utils.camel_case_to_uscore(namespace).lower() + '_'
+                self.ns_upper = f'{utils.camel_case_to_uscore(namespace).upper()}_'
+                self.ns_lower = f'{utils.camel_case_to_uscore(namespace).lower()}_'
         else:
             self.ns_upper = ''
             self.ns_lower = ''
@@ -262,10 +262,10 @@ class CodeGenerator:
                     unix_fd = False
                     if utils.lookup_annotation(m.annotations, 'org.gtk.GDBus.C.UnixFD'):
                         unix_fd = True
-                    key = (m.since, '_method_%s'%m.name_lower)
+                    key = m.since, f'_method_{m.name_lower}'
                     value  = '  gboolean (*handle_%s) (\n'%(m.name_lower)
                     value += '    %s *object,\n'%(i.camel_name)
-                    value += '    GDBusMethodInvocation *invocation'%()
+                    value += f'    GDBusMethodInvocation *invocation'
                     if unix_fd:
                         value += ',\n    GUnixFDList *fd_list'
                     for a in m.in_args:
@@ -277,9 +277,9 @@ class CodeGenerator:
             if len(i.signals) > 0:
                 self.h.write('\n')
                 for s in i.signals:
-                    key = (s.since, '_signal_%s'%s.name_lower)
+                    key = s.since, f'_signal_{s.name_lower}'
                     value  = '  void (*%s) (\n'%(s.name_lower)
-                    value += '    %s *object'%(i.camel_name)
+                    value += f'    {i.camel_name} *object'
                     for a in s.args:
                         value += ',\n    %sarg_%s'%(a.ctype_in, a.name)
                     value += ');\n\n'
@@ -289,7 +289,7 @@ class CodeGenerator:
             if len(i.properties) > 0:
                 self.h.write('\n')
                 for p in i.properties:
-                    key = (p.since, '_prop_get_%s'%p.name_lower)
+                    key = p.since, f'_prop_get_{p.name_lower}'
                     value = '  %s (*get_%s) (%s *object);\n\n'%(p.arg.ctype_in, p.name_lower, i.camel_name)
                     function_pointers[key] = value
 
@@ -303,7 +303,7 @@ class CodeGenerator:
             # See https://bugzilla.gnome.org/show_bug.cgi?id=647577#c5
             # for discussion
             for key in sorted(function_pointers.keys(), key=utils.version_cmp_key):
-                self.h.write('%s'%function_pointers[key])
+                self.h.write(f'{function_pointers[key]}')
 
             self.h.write('};\n')
             self.h.write('\n')
@@ -743,7 +743,7 @@ class CodeGenerator:
     # ----------------------------------------------------------------------------------------------------
 
     def generate_annotations(self, prefix, annotations):
-        if annotations == None:
+        if annotations is None:
             return
 
         n = 0
@@ -783,7 +783,10 @@ class CodeGenerator:
 
     def generate_args(self, prefix, args):
         for a in args:
-            num_anno = self.generate_annotations('%s_arg_%s_annotation_info'%(prefix, a.name), a.annotations)
+            num_anno = self.generate_annotations(
+                f'{prefix}_arg_{a.name}_annotation_info', a.annotations
+            )
+
 
             self.c.write('static const _ExtendedGDBusArgInfo %s_%s =\n'
                          '{\n'
@@ -813,192 +816,214 @@ class CodeGenerator:
                          '\n')
 
     def generate_introspection_for_interface(self, i):
-            self.c.write('/* ---- Introspection data for %s ---- */\n'
-                         '\n'%(i.name))
+        self.c.write('/* ---- Introspection data for %s ---- */\n'
+                     '\n'%(i.name))
 
-            if len(i.methods) > 0:
-                for m in i.methods:
-                    unix_fd = False
-                    if utils.lookup_annotation(m.annotations, 'org.gtk.GDBus.C.UnixFD'):
-                        unix_fd = True
-                    self.generate_args('_%s_method_info_%s_IN_ARG'%(i.name_lower, m.name_lower), m.in_args)
-                    self.generate_args('_%s_method_info_%s_OUT_ARG'%(i.name_lower, m.name_lower), m.out_args)
+        if len(i.methods) > 0:
+            for m in i.methods:
+                unix_fd = False
+                if utils.lookup_annotation(m.annotations, 'org.gtk.GDBus.C.UnixFD'):
+                    unix_fd = True
+                self.generate_args(
+                    f'_{i.name_lower}_method_info_{m.name_lower}_IN_ARG', m.in_args
+                )
 
-                    num_anno = self.generate_annotations('_%s_method_%s_annotation_info'%(i.name_lower, m.name_lower), m.annotations)
+                self.generate_args(
+                    f'_{i.name_lower}_method_info_{m.name_lower}_OUT_ARG',
+                    m.out_args,
+                )
 
-                    self.c.write('static const _ExtendedGDBusMethodInfo _%s_method_info_%s =\n'
-                                 '{\n'
-                                 '  {\n'
-                                 '    -1,\n'
-                                 '    (gchar *) "%s",\n'%(i.name_lower, m.name_lower, m.name))
-                    if len(m.in_args) == 0:
-                        self.c.write('    NULL,\n')
-                    else:
-                        self.c.write('    (GDBusArgInfo **) &_%s_method_info_%s_IN_ARG_pointers,\n'%(i.name_lower, m.name_lower))
-                    if len(m.out_args) == 0:
-                        self.c.write('    NULL,\n')
-                    else:
-                        self.c.write('    (GDBusArgInfo **) &_%s_method_info_%s_OUT_ARG_pointers,\n'%(i.name_lower, m.name_lower))
-                    if num_anno == 0:
-                        self.c.write('    NULL\n')
-                    else:
-                        self.c.write('    (GDBusAnnotationInfo **) &_%s_method_%s_annotation_info_pointers\n'%(i.name_lower, m.name_lower))
-                    self.c.write('  },\n'
-                                 '  "handle-%s",\n'
-                                 '  %s\n'
-                                 %(m.name_hyphen, 'TRUE' if unix_fd else 'FALSE'))
-                    self.c.write('};\n'
-                                 '\n')
 
-                self.c.write('static const _ExtendedGDBusMethodInfo * const _%s_method_info_pointers[] =\n'
-                             '{\n'%(i.name_lower))
-                for m in i.methods:
-                    self.c.write('  &_%s_method_info_%s,\n'%(i.name_lower, m.name_lower))
-                self.c.write('  NULL\n'
-                             '};\n'
+                num_anno = self.generate_annotations(
+                    f'_{i.name_lower}_method_{m.name_lower}_annotation_info',
+                    m.annotations,
+                )
+
+
+                self.c.write('static const _ExtendedGDBusMethodInfo _%s_method_info_%s =\n'
+                             '{\n'
+                             '  {\n'
+                             '    -1,\n'
+                             '    (gchar *) "%s",\n'%(i.name_lower, m.name_lower, m.name))
+                if len(m.in_args) == 0:
+                    self.c.write('    NULL,\n')
+                else:
+                    self.c.write('    (GDBusArgInfo **) &_%s_method_info_%s_IN_ARG_pointers,\n'%(i.name_lower, m.name_lower))
+                if len(m.out_args) == 0:
+                    self.c.write('    NULL,\n')
+                else:
+                    self.c.write('    (GDBusArgInfo **) &_%s_method_info_%s_OUT_ARG_pointers,\n'%(i.name_lower, m.name_lower))
+                if num_anno == 0:
+                    self.c.write('    NULL\n')
+                else:
+                    self.c.write('    (GDBusAnnotationInfo **) &_%s_method_%s_annotation_info_pointers\n'%(i.name_lower, m.name_lower))
+                self.c.write('  },\n'
+                             '  "handle-%s",\n'
+                             '  %s\n'
+                             %(m.name_hyphen, 'TRUE' if unix_fd else 'FALSE'))
+                self.c.write('};\n'
                              '\n')
 
-            # ---
-
-            if len(i.signals) > 0:
-                for s in i.signals:
-                    self.generate_args('_%s_signal_info_%s_ARG'%(i.name_lower, s.name_lower), s.args)
-
-                    num_anno = self.generate_annotations('_%s_signal_%s_annotation_info'%(i.name_lower, s.name_lower), s.annotations)
-                    self.c.write('static const _ExtendedGDBusSignalInfo _%s_signal_info_%s =\n'
-                                 '{\n'
-                                 '  {\n'
-                                 '    -1,\n'
-                                 '    (gchar *) "%s",\n'%(i.name_lower, s.name_lower, s.name))
-                    if len(s.args) == 0:
-                        self.c.write('    NULL,\n')
-                    else:
-                        self.c.write('    (GDBusArgInfo **) &_%s_signal_info_%s_ARG_pointers,\n'%(i.name_lower, s.name_lower))
-                    if num_anno == 0:
-                        self.c.write('    NULL\n')
-                    else:
-                        self.c.write('    (GDBusAnnotationInfo **) &_%s_signal_%s_annotation_info_pointers\n'%(i.name_lower, s.name_lower))
-                    self.c.write('  },\n'
-                                 '  "%s"\n'
-                                 %(s.name_hyphen))
-                    self.c.write('};\n'
-                                 '\n')
-
-                self.c.write('static const _ExtendedGDBusSignalInfo * const _%s_signal_info_pointers[] =\n'
-                             '{\n'%(i.name_lower))
-                for s in i.signals:
-                    self.c.write('  &_%s_signal_info_%s,\n'%(i.name_lower, s.name_lower))
-                self.c.write('  NULL\n'
-                             '};\n'
-                             '\n')
-
-            # ---
-
-            if len(i.properties) > 0:
-                for p in i.properties:
-                    if p.readable and p.writable:
-                        access = 'G_DBUS_PROPERTY_INFO_FLAGS_READABLE | G_DBUS_PROPERTY_INFO_FLAGS_WRITABLE'
-                    elif p.readable:
-                        access = 'G_DBUS_PROPERTY_INFO_FLAGS_READABLE'
-                    elif p.writable:
-                        access = 'G_DBUS_PROPERTY_INFO_FLAGS_WRITABLE'
-                    else:
-                        access = 'G_DBUS_PROPERTY_INFO_FLAGS_NONE'
-                    num_anno = self.generate_annotations('_%s_property_%s_annotation_info'%(i.name_lower, p.name_lower), p.annotations)
-                    self.c.write('static const _ExtendedGDBusPropertyInfo _%s_property_info_%s =\n'
-                                 '{\n'
-                                 '  {\n'
-                                 '    -1,\n'
-                                 '    (gchar *) "%s",\n'
-                                 '    (gchar *) "%s",\n'
-                                 '    %s,\n'%(i.name_lower, p.name_lower, p.name, p.arg.signature, access))
-                    if num_anno == 0:
-                        self.c.write('    NULL\n')
-                    else:
-                        self.c.write('    (GDBusAnnotationInfo **) &_%s_property_%s_annotation_info_pointers\n'%(i.name_lower, p.name_lower))
-                    self.c.write('  },\n'
-                                 '  "%s",\n'
-                                 %(p.name_hyphen))
-                    if not utils.lookup_annotation(p.annotations, 'org.gtk.GDBus.C.ForceGVariant'):
-                        self.c.write('  FALSE\n')
-                    else:
-                        self.c.write('  TRUE\n')
-                    self.c.write('};\n'
-                                 '\n')
-
-                self.c.write('static const _ExtendedGDBusPropertyInfo * const _%s_property_info_pointers[] =\n'
-                             '{\n'%(i.name_lower))
-                for p in i.properties:
-                    self.c.write('  &_%s_property_info_%s,\n'%(i.name_lower, p.name_lower))
-                self.c.write('  NULL\n'
-                             '};\n'
-                             '\n')
-
-            num_anno = self.generate_annotations('_%s_annotation_info'%(i.name_lower), i.annotations)
-            self.c.write('static const _ExtendedGDBusInterfaceInfo _%s_interface_info =\n'
-                         '{\n'
-                         '  {\n'
-                         '    -1,\n'
-                         '    (gchar *) "%s",\n'%(i.name_lower, i.name))
-            if len(i.methods) == 0:
-                self.c.write('    NULL,\n')
-            else:
-                self.c.write('    (GDBusMethodInfo **) &_%s_method_info_pointers,\n'%(i.name_lower))
-            if len(i.signals) == 0:
-                self.c.write('    NULL,\n')
-            else:
-                self.c.write('    (GDBusSignalInfo **) &_%s_signal_info_pointers,\n'%(i.name_lower))
-            if len(i.properties) == 0:
-                self.c.write('    NULL,\n')
-            else:
-                self.c.write('    (GDBusPropertyInfo **) &_%s_property_info_pointers,\n'%(i.name_lower))
-            if num_anno == 0:
-                self.c.write('    NULL\n')
-            else:
-                self.c.write('    (GDBusAnnotationInfo **) &_%s_annotation_info_pointers\n'%(i.name_lower))
-            self.c.write('  },\n'
-                         '  "%s",\n'
+            self.c.write('static const _ExtendedGDBusMethodInfo * const _%s_method_info_pointers[] =\n'
+                         '{\n'%(i.name_lower))
+            for m in i.methods:
+                self.c.write('  &_%s_method_info_%s,\n'%(i.name_lower, m.name_lower))
+            self.c.write('  NULL\n'
                          '};\n'
-                         '\n'
-                         %(i.name_hyphen))
-            self.c.write('\n')
-            self.c.write(self.docbook_gen.expand(
-                    '/**\n'
-                    ' * %s_interface_info:\n'
-                    ' *\n'
-                    ' * Gets a machine-readable description of the #%s D-Bus interface.\n'
-                    ' *\n'
-                    ' * Returns: (transfer none): A #GDBusInterfaceInfo. Do not free.\n'
-                    %(i.name_lower, i.name), False))
-            self.write_gtkdoc_deprecated_and_since_and_close(i, self.c, 0)
-            self.c.write('GDBusInterfaceInfo *\n'
-                         '%s_interface_info (void)\n'
-                         '{\n'
-                         '  return (GDBusInterfaceInfo *) &_%s_interface_info.parent_struct;\n'
-                         '}\n'
-                         '\n'%(i.name_lower, i.name_lower))
+                         '\n')
 
-            self.c.write(self.docbook_gen.expand(
-                    '/**\n'
-                    ' * %s_override_properties:\n'
-                    ' * @klass: The class structure for a #GObject<!-- -->-derived class.\n'
-                    ' * @property_id_begin: The property id to assign to the first overridden property.\n'
-                    ' *\n'
-                    ' * Overrides all #GObject properties in the #%s interface for a concrete class.\n'
-                    ' * The properties are overridden in the order they are defined.\n'
-                    ' *\n'
-                    ' * Returns: The last property id.\n'
-                    %(i.name_lower, i.camel_name), False))
-            self.write_gtkdoc_deprecated_and_since_and_close(i, self.c, 0)
-            self.c.write('guint\n'
-                         '%s_override_properties (GObjectClass *klass, guint property_id_begin)\n'
+            # ---
+
+        if len(i.signals) > 0:
+            for s in i.signals:
+                self.generate_args(f'_{i.name_lower}_signal_info_{s.name_lower}_ARG', s.args)
+
+                num_anno = self.generate_annotations(
+                    f'_{i.name_lower}_signal_{s.name_lower}_annotation_info',
+                    s.annotations,
+                )
+
+                self.c.write('static const _ExtendedGDBusSignalInfo _%s_signal_info_%s =\n'
+                             '{\n'
+                             '  {\n'
+                             '    -1,\n'
+                             '    (gchar *) "%s",\n'%(i.name_lower, s.name_lower, s.name))
+                if len(s.args) == 0:
+                    self.c.write('    NULL,\n')
+                else:
+                    self.c.write('    (GDBusArgInfo **) &_%s_signal_info_%s_ARG_pointers,\n'%(i.name_lower, s.name_lower))
+                if num_anno == 0:
+                    self.c.write('    NULL\n')
+                else:
+                    self.c.write('    (GDBusAnnotationInfo **) &_%s_signal_%s_annotation_info_pointers\n'%(i.name_lower, s.name_lower))
+                self.c.write('  },\n'
+                             '  "%s"\n'
+                             %(s.name_hyphen))
+                self.c.write('};\n'
+                             '\n')
+
+            self.c.write('static const _ExtendedGDBusSignalInfo * const _%s_signal_info_pointers[] =\n'
+                         '{\n'%(i.name_lower))
+            for s in i.signals:
+                self.c.write('  &_%s_signal_info_%s,\n'%(i.name_lower, s.name_lower))
+            self.c.write('  NULL\n'
+                         '};\n'
+                         '\n')
+
+            # ---
+
+        if len(i.properties) > 0:
+            for p in i.properties:
+                if p.readable and p.writable:
+                    access = 'G_DBUS_PROPERTY_INFO_FLAGS_READABLE | G_DBUS_PROPERTY_INFO_FLAGS_WRITABLE'
+                elif p.readable:
+                    access = 'G_DBUS_PROPERTY_INFO_FLAGS_READABLE'
+                elif p.writable:
+                    access = 'G_DBUS_PROPERTY_INFO_FLAGS_WRITABLE'
+                else:
+                    access = 'G_DBUS_PROPERTY_INFO_FLAGS_NONE'
+                num_anno = self.generate_annotations(
+                    f'_{i.name_lower}_property_{p.name_lower}_annotation_info',
+                    p.annotations,
+                )
+
+                self.c.write('static const _ExtendedGDBusPropertyInfo _%s_property_info_%s =\n'
+                             '{\n'
+                             '  {\n'
+                             '    -1,\n'
+                             '    (gchar *) "%s",\n'
+                             '    (gchar *) "%s",\n'
+                             '    %s,\n'%(i.name_lower, p.name_lower, p.name, p.arg.signature, access))
+                if num_anno == 0:
+                    self.c.write('    NULL\n')
+                else:
+                    self.c.write('    (GDBusAnnotationInfo **) &_%s_property_%s_annotation_info_pointers\n'%(i.name_lower, p.name_lower))
+                self.c.write('  },\n'
+                             '  "%s",\n'
+                             %(p.name_hyphen))
+                if not utils.lookup_annotation(p.annotations, 'org.gtk.GDBus.C.ForceGVariant'):
+                    self.c.write('  FALSE\n')
+                else:
+                    self.c.write('  TRUE\n')
+                self.c.write('};\n'
+                             '\n')
+
+            self.c.write('static const _ExtendedGDBusPropertyInfo * const _%s_property_info_pointers[] =\n'
                          '{\n'%(i.name_lower))
             for p in i.properties:
-                self.c.write ('  g_object_class_override_property (klass, property_id_begin++, "%s");\n'%(p.name_hyphen))
-            self.c.write('  return property_id_begin - 1;\n'
-                         '}\n'
+                self.c.write('  &_%s_property_info_%s,\n'%(i.name_lower, p.name_lower))
+            self.c.write('  NULL\n'
+                         '};\n'
                          '\n')
-            self.c.write('\n')
+
+        num_anno = self.generate_annotations(
+            f'_{i.name_lower}_annotation_info', i.annotations
+        )
+
+        self.c.write('static const _ExtendedGDBusInterfaceInfo _%s_interface_info =\n'
+                     '{\n'
+                     '  {\n'
+                     '    -1,\n'
+                     '    (gchar *) "%s",\n'%(i.name_lower, i.name))
+        if len(i.methods) == 0:
+            self.c.write('    NULL,\n')
+        else:
+            self.c.write('    (GDBusMethodInfo **) &_%s_method_info_pointers,\n'%(i.name_lower))
+        if len(i.signals) == 0:
+            self.c.write('    NULL,\n')
+        else:
+            self.c.write('    (GDBusSignalInfo **) &_%s_signal_info_pointers,\n'%(i.name_lower))
+        if len(i.properties) == 0:
+            self.c.write('    NULL,\n')
+        else:
+            self.c.write('    (GDBusPropertyInfo **) &_%s_property_info_pointers,\n'%(i.name_lower))
+        if num_anno == 0:
+            self.c.write('    NULL\n')
+        else:
+            self.c.write('    (GDBusAnnotationInfo **) &_%s_annotation_info_pointers\n'%(i.name_lower))
+        self.c.write('  },\n'
+                     '  "%s",\n'
+                     '};\n'
+                     '\n'
+                     %(i.name_hyphen))
+        self.c.write('\n')
+        self.c.write(self.docbook_gen.expand(
+                '/**\n'
+                ' * %s_interface_info:\n'
+                ' *\n'
+                ' * Gets a machine-readable description of the #%s D-Bus interface.\n'
+                ' *\n'
+                ' * Returns: (transfer none): A #GDBusInterfaceInfo. Do not free.\n'
+                %(i.name_lower, i.name), False))
+        self.write_gtkdoc_deprecated_and_since_and_close(i, self.c, 0)
+        self.c.write('GDBusInterfaceInfo *\n'
+                     '%s_interface_info (void)\n'
+                     '{\n'
+                     '  return (GDBusInterfaceInfo *) &_%s_interface_info.parent_struct;\n'
+                     '}\n'
+                     '\n'%(i.name_lower, i.name_lower))
+
+        self.c.write(self.docbook_gen.expand(
+                '/**\n'
+                ' * %s_override_properties:\n'
+                ' * @klass: The class structure for a #GObject<!-- -->-derived class.\n'
+                ' * @property_id_begin: The property id to assign to the first overridden property.\n'
+                ' *\n'
+                ' * Overrides all #GObject properties in the #%s interface for a concrete class.\n'
+                ' * The properties are overridden in the order they are defined.\n'
+                ' *\n'
+                ' * Returns: The last property id.\n'
+                %(i.name_lower, i.camel_name), False))
+        self.write_gtkdoc_deprecated_and_since_and_close(i, self.c, 0)
+        self.c.write('guint\n'
+                     '%s_override_properties (GObjectClass *klass, guint property_id_begin)\n'
+                     '{\n'%(i.name_lower))
+        for p in i.properties:
+            self.c.write ('  g_object_class_override_property (klass, property_id_begin++, "%s");\n'%(p.name_hyphen))
+        self.c.write('  return property_id_begin - 1;\n'
+                     '}\n'
+                     '\n')
+        self.c.write('\n')
 
     # ----------------------------------------------------------------------------------------------------
 
@@ -1023,21 +1048,21 @@ class CodeGenerator:
         doc_bits = {}
         if len(i.methods) > 0:
             for m in i.methods:
-                key = (m.since, '_method_%s'%m.name_lower)
-                value  = '@handle_%s: '%(m.name_lower)
-                value += 'Handler for the #%s::handle-%s signal.'%(i.camel_name, m.name_hyphen)
+                key = m.since, f'_method_{m.name_lower}'
+                value = f'@handle_{m.name_lower}: '
+                value += f'Handler for the #{i.camel_name}::handle-{m.name_hyphen} signal.'
                 doc_bits[key] = value
         if len(i.signals) > 0:
             for s in i.signals:
-                key = (s.since, '_signal_%s'%s.name_lower)
-                value  = '@%s: '%(s.name_lower)
-                value += 'Handler for the #%s::%s signal.'%(i.camel_name, s.name_hyphen)
+                key = s.since, f'_signal_{s.name_lower}'
+                value = f'@{s.name_lower}: '
+                value += f'Handler for the #{i.camel_name}::{s.name_hyphen} signal.'
                 doc_bits[key] = value
         if len(i.properties) > 0:
             for p in i.properties:
-                key = (p.since, '_prop_get_%s'%p.name_lower)
-                value  = '@get_%s: '%(p.name_lower)
-                value += 'Getter for the #%s:%s property.'%(i.camel_name, p.name_hyphen)
+                key = p.since, f'_prop_get_{p.name_lower}'
+                value = f'@get_{p.name_lower}: '
+                value += f'Getter for the #{i.camel_name}:{p.name_hyphen} property.'
                 doc_bits[key] = value
         for key in sorted(doc_bits.keys(), key=utils.version_cmp_key):
             self.c.write(' * %s\n'%doc_bits[key])
@@ -1082,10 +1107,7 @@ class CodeGenerator:
                         '   * Returns: %%TRUE if the invocation was handled, %%FALSE to let other signal handlers run.\n'
                         %(i.name, m.name, i.name_lower, m.name_lower), False))
                 self.write_gtkdoc_deprecated_and_since_and_close(m, self.c, 2)
-                if unix_fd:
-                    extra_args = 2
-                else:
-                    extra_args = 1
+                extra_args = 2 if unix_fd else 1
                 self.c.write('  g_signal_new ("handle-%s",\n'
                              '    G_TYPE_FROM_INTERFACE (iface),\n'
                              '    G_SIGNAL_RUN_LAST,\n'
@@ -1100,7 +1122,7 @@ class CodeGenerator:
                 if unix_fd:
                     self.c.write(', G_TYPE_UNIX_FD_LIST')
                 for a in m.in_args:
-                    self.c.write (', %s'%(a.gtype))
+                    self.c.write(f', {a.gtype}')
                 self.c.write(');\n')
                 self.c.write('\n')
 
@@ -1132,7 +1154,7 @@ class CodeGenerator:
                              '    %d'
                              %(s.name_hyphen, i.camel_name, s.name_lower, len(s.args)))
                 for a in s.args:
-                    self.c.write (', %s'%(a.gtype))
+                    self.c.write(f', {a.gtype}')
                 self.c.write(');\n')
                 self.c.write('\n')
 
@@ -1146,7 +1168,10 @@ class CodeGenerator:
                 elif p.writable:
                     hint = 'Since the D-Bus property for this #GObject property is writable but not readable, it is meaningful to write to it on both the client- and service-side. It is only meaningful, however, to read from it on the service-side.'
                 else:
-                    raise RuntimeError('Cannot handle property %s that neither readable nor writable'%(p.name))
+                    raise RuntimeError(
+                        f'Cannot handle property {p.name} that neither readable nor writable'
+                    )
+
                 self.c.write(self.docbook_gen.expand(
                         '  /**\n'
                         '   * %s:%s:\n'
@@ -1192,8 +1217,8 @@ class CodeGenerator:
                 elif p.arg.signature == 'aay':
                     s = 'g_param_spec_boxed ("%s", "%s", "%s", G_TYPE_STRV'%(p.name_hyphen, p.name, p.name)
                 else:
-                    raise RuntimeError('Unsupported gtype %s for GParamSpec'%(p.arg.gtype))
-                self.c.write('    %s, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));'%s);
+                    raise RuntimeError(f'Unsupported gtype {p.arg.gtype} for GParamSpec')
+                self.c.write(f'    {s}, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));');
                 self.c.write('\n')
 
         self.c.write('}\n'
@@ -1211,7 +1236,10 @@ class CodeGenerator:
             elif p.writable:
                 hint = 'Since this D-Bus property is not readable, it is only meaningful to use this function on the service-side.'
             else:
-                raise RuntimeError('Cannot handle property %s that neither readable nor writable'%(p.name))
+                raise RuntimeError(
+                    f'Cannot handle property {p.name} that neither readable nor writable'
+                )
+
             self.c.write(self.docbook_gen.expand(
                     '/**\n'
                     ' * %s_get_%s: (skip)\n'
@@ -1222,13 +1250,13 @@ class CodeGenerator:
                     ' * %s\n'
                     ' *\n'
                     %(i.name_lower, p.name_lower, i.camel_name, i.name, p.name, hint), False))
-            if p.arg.free_func != None:
+            if p.arg.free_func is None:
+                self.c.write(' * Returns: The property value.\n')
+            else:
                 self.c.write(' * <warning>The returned value is only valid until the property changes so on the client-side it is only safe to use this function on the thread where @object was constructed. Use %s_dup_%s() if on another thread.</warning>\n'
                              ' *\n'
                              ' * Returns: (transfer none): The property value or %%NULL if the property is not set. Do not free the returned value, it belongs to @object.\n'
                              %(i.name_lower, p.name_lower))
-            else:
-                self.c.write(' * Returns: The property value.\n')
             self.write_gtkdoc_deprecated_and_since_and_close(p, self.c, 0)
             self.c.write('%s\n'
                          '%s_get_%s (%s *object)\n'
@@ -1267,7 +1295,10 @@ class CodeGenerator:
             elif p.writable:
                 hint = 'Since this D-Bus property is writable, it is meaningful to use this function on both the client- and service-side.'
             else:
-                raise RuntimeError('Cannot handle property %s that neither readable nor writable'%(p.name))
+                raise RuntimeError(
+                    f'Cannot handle property {p.name} that neither readable nor writable'
+                )
+
             self.c.write(self.docbook_gen.expand(
                     '/**\n'
                     ' * %s_set_%s: (skip)\n'
@@ -1311,7 +1342,7 @@ class CodeGenerator:
                          '{\n'
                          '  g_signal_emit_by_name (object, "%s"'%(s.name_hyphen))
             for a in s.args:
-                self.c.write(', arg_%s'%a.name)
+                self.c.write(f', arg_{a.name}')
             self.c.write(');\n')
             self.c.write('}\n'
                          '\n')
